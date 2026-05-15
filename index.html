@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>ตารางเวลาว่าง</title>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Sarabun', sans-serif; background: #f0f4ff; color: #333; font-size: 15px; }
+.header { background: linear-gradient(135deg, #667eea, #764ba2); color: white; padding: 16px; text-align: center; }
+.header h1 { font-size: 20px; font-weight: bold; }
+.header p { font-size: 13px; opacity: 0.85; margin-top: 4px; }
+.tabs { display: flex; background: white; border-bottom: 2px solid #e8e8e8; position: sticky; top: 0; z-index: 10; }
+.tab { flex: 1; padding: 12px; text-align: center; cursor: pointer; font-size: 14px; color: #999; transition: all 0.2s; }
+.tab.active { color: #667eea; border-bottom: 3px solid #667eea; font-weight: bold; }
+.content { padding: 14px; display: none; }
+.content.active { display: block; }
+.form-group { margin-bottom: 14px; }
+label.field-label { display: block; font-size: 13px; color: #555; margin-bottom: 5px; font-weight: 600; }
+input[type="text"] { width: 100%; padding: 10px 12px; border: 2px solid #ddd; border-radius: 10px; font-size: 15px; outline: none; transition: border-color 0.2s; }
+input[type="text"]:focus { border-color: #667eea; }
+.day-card { background: white; border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); border: 2px solid transparent; transition: border-color 0.2s; }
+.day-card.has-data { border-color: #c5ceff; }
+.day-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.day-title { font-weight: bold; font-size: 15px; }
+.allday-toggle { display: flex; align-items: center; gap: 6px; cursor: pointer; background: #f0f0f0; border: none; border-radius: 20px; padding: 5px 12px; font-size: 13px; color: #555; transition: all 0.2s; }
+.allday-toggle.active { background: #667eea; color: white; }
+.ranges-wrap { display: flex; flex-direction: column; gap: 6px; }
+.range-row { display: flex; align-items: center; gap: 6px; background: #f7f8ff; border-radius: 8px; padding: 7px 10px; }
+.range-row input[type="time"] { flex: 1; border: 1px solid #ddd; border-radius: 6px; padding: 5px 6px; font-size: 14px; outline: none; color: #333; background: white; min-width: 0; }
+.range-row input[type="time"]:focus { border-color: #667eea; }
+.range-sep { font-size: 12px; color: #999; white-space: nowrap; }
+.del-btn { background: none; border: none; color: #ccc; font-size: 20px; cursor: pointer; padding: 0 2px; line-height: 1; flex-shrink: 0; }
+.add-range-btn { display: flex; align-items: center; gap: 5px; margin-top: 8px; background: none; border: 2px dashed #ddd; border-radius: 8px; padding: 7px 12px; color: #aaa; font-size: 13px; cursor: pointer; width: 100%; justify-content: center; transition: all 0.2s; }
+.add-range-btn:hover { border-color: #667eea; color: #667eea; }
+.allday-badge { background: #eef0ff; color: #667eea; border-radius: 8px; padding: 8px 12px; font-size: 13px; text-align: center; font-weight: 600; }
+.btn { width: 100%; padding: 13px; border: none; border-radius: 12px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 6px; transition: all 0.2s; }
+.btn-primary { background: linear-gradient(135deg, #667eea, #764ba2); color: white; }
+.btn-primary:active { opacity: 0.85; }
+.btn-ghost { background: #f0f0f0; color: #666; margin-top: 8px; }
+.toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 10px 20px; border-radius: 20px; font-size: 14px; display: none; z-index: 999; white-space: nowrap; pointer-events: none; }
+.toast.show { display: block; animation: fadeUp 0.3s ease; }
+@keyframes fadeUp { from { opacity:0; transform: translate(-50%, 8px); } to { opacity:1; transform: translate(-50%, 0); } }
+.summary-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.summary-top h2 { font-size: 16px; }
+.refresh-btn { background: #f0f0f0; border: none; border-radius: 8px; padding: 6px 12px; cursor: pointer; font-size: 13px; }
+.people-bar { background: white; border-radius: 10px; padding: 10px 14px; margin-bottom: 10px; font-size: 13px; color: #666; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+.people-bar b { color: #333; }
+.day-summary-card { background: white; border-radius: 12px; margin-bottom: 10px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.07); }
+.day-summary-header { background: linear-gradient(135deg, #667eea, #764ba2); color: white; padding: 9px 14px; font-weight: bold; font-size: 14px; }
+.overlap-block { padding: 9px 14px; border-bottom: 1px solid #f0f0f0; }
+.overlap-block:last-child { border-bottom: none; }
+.overlap-time-row { display: flex; justify-content: space-between; align-items: center; }
+.overlap-time { font-size: 15px; font-weight: bold; color: #333; }
+.overlap-badge { font-size: 12px; color: white; border-radius: 12px; padding: 2px 9px; font-weight: bold; }
+.badge-all { background: #2ecc71; }
+.badge-most { background: #f39c12; }
+.badge-some { background: #95a5a6; }
+.overlap-names { font-size: 12px; color: #888; margin-top: 3px; }
+.empty-state { text-align: center; padding: 40px 20px; color: #bbb; }
+.empty-icon { font-size: 48px; margin-bottom: 10px; }
+.section-label { font-size: 13px; color: #888; font-weight: 600; margin-bottom: 8px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🎉 ตารางซ้อมสันทนาการ</h1>
+  <p>กรอกวันเวลาที่ว่าง แล้วดูว่าวันไหนตรงกัน!</p>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('input')">✏️ กรอกเวลาว่าง</div>
+  <div class="tab" onclick="switchTab('summary')">📊 ดูวันที่ตรงกัน</div>
+</div>
+
+<div id="tab-input" class="content active">
+  <div class="form-group">
+    <label class="field-label">ชื่อของคุณ</label>
+    <input type="text" id="nameInput" placeholder="กรอกชื่อ เช่น มินท์, บอส..." maxlength="30">
+  </div>
+  <div class="section-label">เลือกวันและเวลาที่ว่าง 👇</div>
+  <div id="calendar"></div>
+  <button class="btn btn-primary" onclick="submitAvailability()">💾 บันทึกเวลาว่าง</button>
+  <button class="btn btn-ghost" onclick="clearAll()">🗑️ ล้างทั้งหมด</button>
+</div>
+
+<div id="tab-summary" class="content">
+  <div class="summary-top">
+    <h2>วันเวลาที่ว่างตรงกัน</h2>
+    <button class="refresh-btn" onclick="loadSummary()">🔄 รีเฟรช</button>
+  </div>
+  <div id="summaryContent">
+    <div class="empty-state"><div class="empty-icon">📅</div>กดรีเฟรชเพื่อโหลด</div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// Firebase config
+const firebaseConfig = {
+  apiKey: "AIzaSyAqr4zduyR01WTRmrjkKspOXO3EM2wt1pI",
+  authDomain: "rotaract-santanagan.firebaseapp.com",
+  databaseURL: "https://rotaract-santanagan-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "rotaract-santanagan",
+  storageBucket: "rotaract-santanagan.firebasestorage.app",
+  messagingSenderId: "992994791472",
+  appId: "1:992994791472:web:81966bef066eb4e5325df5"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+function dbSave(name, slots, cb) {
+  db.ref('availability/' + name).set(slots)
+    .then(() => cb({ success: true, count: slots.length }))
+    .catch(e => { console.error(e); cb({ success: false }); });
+}
+
+function dbLoad(cb) {
+  db.ref('availability').once('value')
+    .then(snap => {
+      const val = snap.val() || {};
+      const result = [];
+      Object.entries(val).forEach(([name, slots]) => {
+        if (Array.isArray(slots)) {
+          slots.forEach(s => result.push({ name, date: s.date, startTime: s.startTime, endTime: s.endTime }));
+        }
+      });
+      cb(result);
+    })
+    .catch(e => { console.error(e); cb([]); });
+}
+
+function getDates(n = 14) {
+  const today = new Date(); today.setHours(0,0,0,0);
+  return Array.from({length: n}, (_, i) => { const d = new Date(today); d.setDate(today.getDate()+i); return d; });
+}
+function fmt(d) { return d.toISOString().split('T')[0]; }
+function fmtTH(d) {
+  const DAY = ['อา','จ','อ','พ','พฤ','ศ','ส'];
+  const MON = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  return `${DAY[d.getDay()]} ${d.getDate()} ${MON[d.getMonth()]}`;
+}
+
+function buildCalendar() {
+  const cal = document.getElementById('calendar');
+  cal.innerHTML = '';
+  getDates().forEach(date => {
+    const key = fmt(date);
+    const card = document.createElement('div');
+    card.className = 'day-card'; card.id = `card-${key}`;
+    card.innerHTML = `
+      <div class="day-header">
+        <div class="day-title">${fmtTH(date)}</div>
+        <button class="allday-toggle" id="allday-${key}" onclick="toggleAllDay('${key}')">☀️ ทั้งวัน</button>
+      </div>
+      <div id="body-${key}">
+        <div class="ranges-wrap" id="ranges-${key}"></div>
+        <button class="add-range-btn" onclick="addRange('${key}')">＋ เพิ่มช่วงเวลา</button>
+      </div>
+      <div id="allday-badge-${key}" style="display:none" class="allday-badge">✅ ว่างทั้งวัน</div>
+    `;
+    cal.appendChild(card);
+  });
+}
+
+let alldayState = {}, rangeCount = {};
+
+function toggleAllDay(key) {
+  alldayState[key] = !alldayState[key];
+  document.getElementById(`allday-${key}`).classList.toggle('active', alldayState[key]);
+  document.getElementById(`body-${key}`).style.display = alldayState[key] ? 'none' : '';
+  document.getElementById(`allday-badge-${key}`).style.display = alldayState[key] ? '' : 'none';
+  updateCardState(key);
+}
+
+function addRange(key) {
+  if (!rangeCount[key]) rangeCount[key] = 0;
+  const id = `range-${key}-${rangeCount[key]++}`;
+  const wrap = document.getElementById(`ranges-${key}`);
+  const row = document.createElement('div');
+  row.className = 'range-row'; row.id = id;
+  row.innerHTML = `
+    <input type="time" id="${id}-s" value="09:00" onchange="updateCardState('${key}')">
+    <span class="range-sep">ถึง</span>
+    <input type="time" id="${id}-e" value="12:00" onchange="updateCardState('${key}')">
+    <button class="del-btn" onclick="delRange('${id}','${key}')">×</button>
+  `;
+  wrap.appendChild(row);
+  updateCardState(key);
+}
+
+function delRange(id, key) {
+  document.getElementById(id)?.remove();
+  updateCardState(key);
+}
+
+function updateCardState(key) {
+  const hasRanges = document.querySelectorAll(`#ranges-${key} .range-row`).length > 0;
+  document.getElementById(`card-${key}`).classList.toggle('has-data', alldayState[key] || hasRanges);
+}
+
+function clearAll() { alldayState = {}; rangeCount = {}; buildCalendar(); }
+
+function collectSlots() {
+  const slots = [];
+  getDates().forEach(date => {
+    const key = fmt(date);
+    if (alldayState[key]) {
+      slots.push({ date: key, startTime: 'allday', endTime: 'allday' });
+    } else {
+      document.querySelectorAll(`#ranges-${key} .range-row`).forEach(row => {
+        const s = row.querySelector(`input[id$="-s"]`).value;
+        const e = row.querySelector(`input[id$="-e"]`).value;
+        if (s && e) {
+          const [sh,sm] = s.split(':').map(Number), [eh,em] = e.split(':').map(Number);
+          const start = sh*60+sm, end = eh*60+em;
+          slots.push({ date: key, startTime: start <= end ? s : e, endTime: start <= end ? e : s });
+        }
+      });
+    }
+  });
+  return slots;
+}
+
+function submitAvailability() {
+  const name = document.getElementById('nameInput').value.trim();
+  if (!name) { showToast('❗ กรุณากรอกชื่อก่อนนะ'); return; }
+  const slots = collectSlots();
+  if (!slots.length) { showToast('❗ เลือกอย่างน้อย 1 ช่วงเวลา'); return; }
+  showToast('⏳ กำลังบันทึก...');
+  dbSave(name, slots, res => showToast(res.success ? `✅ บันทึกแล้ว ${res.count} ช่วงเวลา!` : '❌ ผิดพลาด ลองใหม่'));
+}
+
+function switchTab(tab) {
+  ['input','summary'].forEach(t => document.getElementById(`tab-${t}`).classList.toggle('active', t === tab));
+  document.querySelectorAll('.tab').forEach((el, i) => el.classList.toggle('active', (i===0) === (tab==='input')));
+  if (tab === 'summary') loadSummary();
+}
+
+function showToast(msg, ms = 2500) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), ms);
+}
+
+const TOTAL_SLOTS = 48;
+function timeToSlot(t) { const [h,m] = t.split(':').map(Number); return h*2+Math.floor(m/30); }
+function slotToTime(n) { const h=Math.floor(n/2),m=(n%2)*30; return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`; }
+
+function loadSummary() {
+  document.getElementById('summaryContent').innerHTML = '<div class="empty-state"><div class="empty-icon">⏳</div>กำลังโหลด...</div>';
+  dbLoad(renderSummary);
+}
+
+function renderSummary(data) {
+  const el = document.getElementById('summaryContent');
+  if (!data || !data.length) { el.innerHTML = '<div class="empty-state"><div class="empty-icon">📭</div>ยังไม่มีใครกรอกข้อมูลเลย</div>'; return; }
+  const names = [...new Set(data.map(d => d.name))];
+  const total = names.length;
+  const byDate = {};
+  data.forEach(({ name, date, startTime, endTime }) => {
+    if (!byDate[date]) byDate[date] = {};
+    if (!byDate[date][name]) byDate[date][name] = [];
+    byDate[date][name].push({ startTime, endTime });
+  });
+  let html = `<div class="people-bar">มีทั้งหมด <b>${total} คน</b>: ${names.join(', ')}</div>`;
+  let hasOverlap = false;
+  Object.keys(byDate).sort().forEach(date => {
+    const slotCount = new Array(TOTAL_SLOTS).fill(0);
+    const slotNames = Array.from({length: TOTAL_SLOTS}, () => []);
+    Object.entries(byDate[date]).forEach(([name, ranges]) => {
+      ranges.forEach(({ startTime, endTime }) => {
+        let s, e;
+        if (startTime === 'allday') { s = 0; e = TOTAL_SLOTS; }
+        else { s = timeToSlot(startTime); e = timeToSlot(endTime); }
+        for (let i = s; i < e && i < TOTAL_SLOTS; i++) { slotCount[i]++; if (!slotNames[i].includes(name)) slotNames[i].push(name); }
+      });
+    });
+    const blocks = [];
+    let i = 0;
+    while (i < TOTAL_SLOTS) {
+      if (slotCount[i] === 0) { i++; continue; }
+      let j = i+1;
+      while (j < TOTAL_SLOTS && slotCount[j] === slotCount[i] && arrEq(slotNames[j], slotNames[i])) j++;
+      blocks.push({ start: i, end: j, count: slotCount[i], who: [...slotNames[i]] });
+      i = j;
+    }
+    if (!blocks.length) return;
+    hasOverlap = true;
+    const d = new Date(date + 'T00:00:00');
+    html += `<div class="day-summary-card"><div class="day-summary-header">📅 ${fmtTH(d)}</div>`;
+    blocks.forEach(b => {
+      const ratio = b.count / total;
+      const cls = ratio >= 1 ? 'badge-all' : ratio >= 0.5 ? 'badge-most' : 'badge-some';
+      const label = b.count >= total ? 'ว่างพร้อมกัน!' : `${b.count}/${total} คน`;
+      html += `<div class="overlap-block"><div class="overlap-time-row"><span class="overlap-time">${slotToTime(b.start)} – ${slotToTime(b.end)}</span><span class="overlap-badge ${cls}">${label}</span></div><div class="overlap-names">${b.who.join(', ')}</div></div>`;
+    });
+    html += '</div>';
+  });
+  el.innerHTML = hasOverlap ? html : '<div class="empty-state"><div class="empty-icon">😕</div>ยังไม่มีเวลาที่ตรงกันเลย</div>';
+}
+
+function arrEq(a, b) { return a.length === b.length && a.every((v,i) => v === b[i]); }
+
+buildCalendar();
+</script>
+</body>
+</html>
