@@ -42,6 +42,7 @@ input[type="text"]:focus { border-color: #667eea; }
 .btn-primary { background: linear-gradient(135deg, #667eea, #764ba2); color: white; }
 .btn-primary:active { opacity: 0.85; }
 .btn-ghost { background: #f0f0f0; color: #666; margin-top: 8px; }
+.btn-delete { background: #fff0f0; color: #e74c3c; border: 2px solid #fcc; margin-top: 8px; }
 .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 10px 20px; border-radius: 20px; font-size: 14px; display: none; z-index: 999; white-space: nowrap; pointer-events: none; }
 .toast.show { display: block; animation: fadeUp 0.3s ease; }
 @keyframes fadeUp { from { opacity:0; transform: translate(-50%, 8px); } to { opacity:1; transform: translate(-50%, 0); } }
@@ -86,7 +87,8 @@ input[type="text"]:focus { border-color: #667eea; }
   <div class="section-label">เลือกวันและเวลาที่ว่าง 👇</div>
   <div id="calendar"></div>
   <button class="btn btn-primary" onclick="submitAvailability()">💾 บันทึกเวลาว่าง</button>
-  <button class="btn btn-ghost" onclick="clearAll()">🗑️ ล้างทั้งหมด</button>
+  <button class="btn btn-ghost" onclick="clearAll()">🗑️ ล้างฟอร์ม</button>
+  <button class="btn btn-delete" onclick="deleteMyData()">❌ ลบข้อมูลของฉัน</button>
 </div>
 
 <div id="tab-summary" class="content">
@@ -227,6 +229,15 @@ function collectSlots() {
     }
   });
   return slots;
+}
+
+function deleteMyData() {
+  const name = document.getElementById('nameInput').value.trim();
+  if (!name) { showToast('❗ กรอกชื่อก่อนนะ'); return; }
+  if (!confirm(`ลบข้อมูลของ "${name}" ทั้งหมดเลยนะ?`)) return;
+  db.ref('availability/' + name).remove()
+    .then(() => { showToast(`🗑️ ลบข้อมูลของ ${name} แล้ว`); clearAll(); })
+    .catch(() => showToast('❌ ลบไม่ได้ ลองใหม่'));
 }
 
 function submitAvailability() {
